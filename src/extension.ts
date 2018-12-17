@@ -12,9 +12,11 @@ export function activate(context: vscode.ExtensionContext) {
     debouncedLint()
 
     function lint(filename?: string) {
+        let entries: [vscode.Uri, vscode.Diagnostic[]][] = []
+
         const ps = spawn('seass', [], { cwd: vscode.workspace.rootPath })
+
         ps.stderr.on('data', (data) => {
-            let entries: [vscode.Uri, vscode.Diagnostic[]][] = []
             const lines = data.toString()
             const re = /(.+)\.css:(\d+):(\d+)-(\d+):(\d+) - (.+)/gi
             while (true) {
@@ -41,7 +43,11 @@ export function activate(context: vscode.ExtensionContext) {
                     ]
                 ])
             }
+        })
 
+        ps.on('error', data => console.error('seass-error:', data))
+        
+        ps.on('exit', () => {
             // If inital call, set all of the entries
             if (filename == null) {
                 diagnosticCollection.set(entries)
@@ -54,11 +60,5 @@ export function activate(context: vscode.ExtensionContext) {
             const groupedEntries = lodash.flatten(entries.map(([_, entry]) => entry))
             diagnosticCollection.set(uri, groupedEntries)
         })
-
-        // Log other events
-        const log = (prefix: string) => (data: any) => console.log(prefix, data)
-        ps.on('error', log('seass-error:'))
-        ps.on('exit', log('seass-exit:'))
-        ps.stdout.on('data', log('seass-data:'))
     }
 }
